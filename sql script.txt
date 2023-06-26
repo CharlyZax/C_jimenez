@@ -1,0 +1,111 @@
+-- Creación de la tabla "Tickets"
+CREATE TABLE Tickets (
+  Id_Tienda VARCHAR(50),
+  Id_Registradora VARCHAR(50),
+  FechaHora DATETIME,
+  Ticket INT,
+  Impuesto MONEY,
+  Total MONEY,
+  FechaHora_Creacion DATETIME,
+  CONSTRAINT PK_Tickets PRIMARY KEY (Ticket)
+);
+
+-- Creación de la tabla "Resumen"
+CREATE TABLE Resumen (
+  Id_Tienda VARCHAR(50),
+  Id_Registradora VARCHAR(50),
+  Tickets INT
+);
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+
+
+-- Creación del trigger para actualizar la tabla "Resumen"
+CREATE TRIGGER UpdateResumen
+ON Tickets
+AFTER INSERT, DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  -- Actualizar la cantidad de tickets en la tabla "Resumen" para la tienda y registradora correspondiente
+  UPDATE Resumen
+  SET Tickets = t.TotalTickets
+  FROM Resumen r
+  INNER JOIN (
+    SELECT Id_Tienda, Id_Registradora, COUNT(*) AS TotalTickets
+    FROM Tickets
+    GROUP BY Id_Tienda, Id_Registradora
+  ) AS t ON r.Id_Tienda = t.Id_Tienda AND r.Id_Registradora = t.Id_Registradora;
+
+  -- Insertar registros en la tabla "Resumen" para las nuevas tiendas y registradoras
+  INSERT INTO Resumen (Id_Tienda, Id_Registradora, Tickets)
+  SELECT Id_Tienda, Id_Registradora, COUNT(*) AS TotalTickets
+  FROM inserted
+  WHERE NOT EXISTS (
+    SELECT *
+    FROM Resumen
+    WHERE Resumen.Id_Tienda = inserted.Id_Tienda AND Resumen.Id_Registradora = inserted.Id_Registradora
+  )
+  GROUP BY Id_Tienda, Id_Registradora;
+
+  -- Eliminar registros de la tabla "Resumen" para las tiendas y registradoras eliminadas
+  DELETE FROM Resumen
+  WHERE EXISTS (
+    SELECT *
+    FROM deleted
+    WHERE Resumen.Id_Tienda = deleted.Id_Tienda AND Resumen.Id_Registradora = deleted.Id_Registradora
+  );
+END;
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+CREATE TABLE LogEjecucion (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    FechaHora DATETIME,
+    Mensaje VARCHAR(MAX)
+);
+
+CREATE PROCEDURE InsertarTicket
+    @Id_Tienda VARCHAR(50),
+    @Id_Registradora VARCHAR(50),
+    @FechaHora DATETIME,
+    @Ticket INT,
+    @Impuesto MONEY,
+    @Total MONEY,
+    @FechaHora_Creacion DATETIME
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Guardar el mensaje en el log
+    INSERT INTO LogEjecucion (FechaHora, Mensaje)
+    VALUES (GETDATE(), 'Ejecutando Stored Procedure InsertarTicket...');
+
+    -- Resto de la lógica del Stored Procedure
+    INSERT INTO Tickets (Id_Tienda, Id_Registradora, FechaHora, Ticket, Impuesto, Total, FechaHora_Creacion)
+    VALUES (@Id_Tienda, @Id_Registradora, @FechaHora, @Ticket, @Impuesto, @Total, @FechaHora_Creacion);
+
+    -- Guardar el mensaje en el log
+    INSERT INTO LogEjecucion (FechaHora, Mensaje)
+    VALUES (GETDATE(), 'Stored Procedure InsertarTicket ejecutado correctamente.');
+END;
+
+
+
+select * from [dbo].[LogEjecucion]
+
+
+select * from Tickets order by Ticket asc
+
+
+delete Tickets where Ticket = 537811
+
+select * from Tickets
+select * from Resumen
+select * from LogEjecucion
